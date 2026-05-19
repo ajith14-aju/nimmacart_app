@@ -97,14 +97,16 @@ function nimmacart() {
 
         get apiUrl() {
             const host = window.location.hostname || 'localhost';
-            const protocol = window.location.protocol === 'file:' ? 'http:' : window.location.protocol;
+            const protocol = window.location.protocol;
             const port = window.location.port;
 
-            if (!port || port === '5500' || port === '5501') {
-                return `http://${host}:3000`;
+            // If running locally via VS Code Live Server (ports 5500/5501) or standard localhost
+            if (host === 'localhost' || host === '127.0.0.1') {
+                return `http://localhost:3000`;
             }
 
-            return `${protocol}//${host}${port ? `:${port}` : ''}`;
+            // If running live on Render, use the current domain name automatically
+            return `${protocol}//${host}`;
         },
 
         // =========================================================================
