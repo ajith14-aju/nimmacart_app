@@ -333,8 +333,9 @@ app.post('/login', (req, res) => {
 
         const user = dbResult.rows[0];
         const oneTimeCode = crypto.randomInt(100000, 1000000).toString();
-        const expiry = new Date();
-        expiry.setMinutes(expiry.getMinutes() + 10);
+        
+        // This creates a standard ISO timestamp string that database engines read natively as UTC
+        const expiry = new Date(Date.now() + 10 * 60 * 1000).toISOString();
 
         const updateSql = "UPDATE users SET two_fa_code = $1, two_fa_expires = $2 WHERE email = $3";
         db.query(updateSql, [oneTimeCode, expiry, email], updateErr => {
@@ -360,7 +361,7 @@ app.post('/verify-2fa', (req, res) => {
     const { email, code } = req.body;
     if (!email || !code) return res.status(400).json({ message: "Email and 2FA code are required" });
 
-    const sql = "SELECT id, email FROM users WHERE email = $1 AND two_fa_code = $2 AND two_fa_expires > CURRENT_TIMESTAMP";
+    const sql = "SELECT id, email FROM users WHERE email = $1 AND two_fa_code = $2 AND two_fa_expires > (NOW() AT TIME ZONE 'utc')";
     db.query(sql, [email, code], (err, result) => {
         if (err) return res.status(500).json({ message: "Database error" });
         if (!result || !result.rows || result.rows.length === 0) {
