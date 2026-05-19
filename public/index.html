@@ -399,7 +399,7 @@
                     </template>
 
                     <!-- 2. Password Field: Hide during basic forgot email query request -->
-                    <template x-if="authMode !== 'forgot' && authMode !== '2fa'">
+                    <template x-if="authMode !== 'forgot'">
                         <div>
                             <label class="text-xs font-bold uppercase text-gray-400 ml-1">Password</label>
                             <div class="relative">
@@ -409,15 +409,6 @@
                                     <i :class="showPassword ? 'fa fa-eye-slash' : 'fa fa-eye'"></i>
                                 </button>
                             </div>
-                        </div>
-                    </template>
-
-                    <template x-if="authMode === '2fa'">
-                        <div>
-                            <p class="text-xs text-slate-500 mb-2">Enter the 6-digit code sent to <span class="font-semibold" x-text="pendingTwoFactorEmail"></span>.</p>
-                            <label class="text-xs font-bold uppercase text-gray-400 ml-1">2FA Code</label>
-                            <input x-model="twoFactorCode" type="text" maxlength="6" placeholder="123456"
-                                class="w-full p-3 mt-1 rounded-xl border dark:border-slate-700 dark:bg-slate-800 outline-none focus:ring-2 focus:ring-blue-500">
                         </div>
                     </template>
                 </div>
@@ -453,17 +444,6 @@
                     <div>
                         <button @click="handleResetPassword()" class="w-full bg-green-600 hover:bg-green-700 text-white py-4 rounded-xl font-bold active:scale-95 transition-all shadow-lg">
                             Save New Password
-                        </button>
-                    </div>
-                </template>
-
-                <template x-if="authMode === '2fa'">
-                    <div class="space-y-2">
-                        <button @click="handleVerifyTwoFactor()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-xl font-bold active:scale-95 transition-all shadow-lg">
-                            Verify Code
-                        </button>
-                        <button @click="authMode = 'login'; pendingTwoFactorEmail = ''; twoFactorCode = '';" class="w-full text-center text-xs font-bold text-gray-400 hover:underline">
-                            Back to Login
                         </button>
                     </div>
                 </template>

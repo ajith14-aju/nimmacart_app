@@ -33,10 +33,8 @@ function nimmacart() {
         isLoggedIn: false,
         currentUser: { email: '' },
         userForm: { email: '', password: '' },
-        authMode: 'login', // Options: 'login', 'signup', 'forgot', 'reset', '2fa'
+        authMode: 'login', // Options: 'login', 'signup', 'forgot', 'reset'
         resetToken: '',
-        pendingTwoFactorEmail: '',
-        twoFactorCode: '',
         newP: { name: '', price: '', category: 'Electronics', image: '', rating: '' },
         showPassword: false, // Toggle for password visibility
         showConfirmPassword: false, // Toggle for confirm password visibility
@@ -197,14 +195,6 @@ function nimmacart() {
                     return;
                 }
 
-                if (data.needs2fa) {
-                    this.authMode = '2fa';
-                    this.pendingTwoFactorEmail = this.userForm.email;
-                    this.userForm.password = '';
-                    this.notify('2FA code successfully dispatched to your inbox!');
-                    return;
-                }
-
                 this.isLoggedIn = true;
                 this.currentUser = { email: this.userForm.email };
                 localStorage.setItem('nimmacartUserEmail', this.userForm.email);
@@ -218,38 +208,6 @@ function nimmacart() {
             }
         },
 
-        async handleVerifyTwoFactor() {
-            if (!this.pendingTwoFactorEmail || !this.twoFactorCode) {
-                this.triggerError("Enter the 2FA code sent to your email.");
-                return;
-            }
-
-            try {
-                const res = await fetch(`${this.apiUrl}/verify-2fa`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email: this.pendingTwoFactorEmail, code: this.twoFactorCode })
-                });
-
-                const data = await res.json();
-
-                if (res.ok) {
-                    this.isLoggedIn = true;
-                    this.currentUser = data.user;
-                    this.showLogin = false;
-                    this.authMode = 'login';
-                    this.pendingTwoFactorEmail = '';
-                    this.twoFactorCode = '';
-                    await this.fetchCart();
-                    await this.fetchWishlist();
-                    this.notify("Two-factor authentication verified. Welcome back!");
-                } else {
-                    this.triggerError(data.message || "Invalid 2FA code");
-                }
-            } catch (error) {
-                this.triggerError("Unable to verify 2FA");
-            }
-        },
 
         async handleForgotPassword() {
             if (!this.userForm.email) {

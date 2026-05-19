@@ -75,19 +75,7 @@ db.connect(err => {
     }
     console.log("Connected to Supabase (PostgreSQL) Database successfully");
 
-    const schemaSql = `
-        ALTER TABLE users ADD COLUMN IF NOT EXISTS two_fa_code TEXT;
-        ALTER TABLE users ADD COLUMN IF NOT EXISTS two_fa_expires TIMESTAMPTZ;
-        ALTER TABLE users ADD COLUMN IF NOT EXISTS two_fa_enabled BOOLEAN DEFAULT true;
-    `;
-
-    db.query(schemaSql, updateErr => {
-        if (updateErr) {
-            console.error("Failed to ensure auth schema columns:", updateErr.message);
-        } else {
-            console.log("Auth schema columns verified in users table.");
-        }
-    });
+    console.log("Connected to Supabase (PostgreSQL) Database successfully");
 });
 
 // =========================================================================
@@ -308,7 +296,7 @@ app.post('/signup', (req, res) => {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ message: "Fields cannot be empty" });
 
-    const sql = "INSERT INTO users (email, password, two_fa_enabled) VALUES ($1, $2, true)";
+    const sql = "INSERT INTO users (email, password) VALUES ($1, $2)";
     db.query(sql, [email, password], (err, result) => {
         if (err){
             console.error("Signup error log:", err.message);
@@ -319,88 +307,20 @@ app.post('/signup', (req, res) => {
 });
 
 /**
- * POST: Evaluate profiles data maps and dispatch two-factor verification codes
+ * POST: Authenticate user credentials and sign in
  */
 app.post('/login', (req, res) => {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ message: "Email and password are required" });
 
-    const sql = "SELECT email, id, two_fa_enabled FROM users WHERE email = $1 AND password = $2";
+    const sql = "SELECT email FROM users WHERE email = $1 AND password = $2";
     db.query(sql, [email, password], (err, dbResult) => {
         if (err || !dbResult || !dbResult.rows || dbResult.rows.length === 0) {
             return res.status(401).json({ message: "Invalid email or password" });
         }
 
-        const user = dbResult.rows[0];
-        const oneTimeCode = crypto.randomInt(100000, 1000000).toString();
+        return res.json({ message: "Login successful", email });
 
-        // Let PostgreSQL generate the 10-minute interval itself securely
-        const updateSql = "UPDATE users SET two_fa_code = $1, two_fa_expires = NOW() + INTERVAL '10 minutes' WHERE email = $2";
-        db.query(updateSql, [oneTimeCode, email], updateErr => {
-            if (updateErr) {
-                console.error("2FA save error:", updateErr.message);
-                return res.status(500).json({ message: "Failed to start two-factor authentication" });
-            }
-
-            // We use 'await' or keep it nested to guarantee the transmission fires before replying to mobile
-            resend.emails.send({
-                from: 'Nimmacart Security <onboarding@resend.dev>',
-                to: user.email,
-                subject: 'Your Nimmacart Two-Factor Authentication Code',
-                text: `Your Nimmacart verification code is: ${oneTimeCode}\n\nEnter this code on the website within 10 minutes to complete login.`
-            })
-            .then(() => {
-                console.log(`Sent 2FA code to ${user.email}`);
-                // Only send the success response to the phone AFTER the email is successfully sent to Resend
-                return res.json({ needs2fa: true, message: "A 2FA code was sent to your email." });
-            })
-            .catch(err => {
-                console.error("2FA email send error:", err.message);
-                return res.status(500).json({ message: "Email delivery system failed. Please try again." });
-            });
-        });
-    });
-});
-
-app.post('/verify-2fa', (req, res) => {
-    const { email, code } = req.body;
-    if (!email || !code) return res.status(400).json({ message: "Email and 2FA code are required" });
-
-    // Look for the user based simply on email and code matches
-    const sql = "SELECT id, email, two_fa_expires FROM users WHERE email = $1 AND two_fa_code = $2";
-    db.query(sql, [email, code], (err, result) => {
-        if (err) return res.status(500).json({ message: "Database error" });
-        if (!result || !result.rows || result.rows.length === 0) {
-            return res.status(401).json({ message: "Invalid 2FA code" });
-        }
-
-        const user = result.rows[0];
-        
-        // Convert database time into a standardized Unix epoch millisecond metric
-        const expiryTime = new Date(user.two_fa_expires).getTime();
-        const currentTime = Date.now();
-
-        // Evaluate code expiration cleanly in server memory
-        if (currentTime > expiryTime) {
-            return res.status(401).json({ message: "Your 2FA code has expired. Please log in again." });
-        }
-
-        const clearSql = "UPDATE users SET two_fa_code = NULL, two_fa_expires = NULL WHERE email = $1";
-        db.query(clearSql, [email], clearErr => {
-            if (clearErr) console.error("Failed to clear 2FA code:", clearErr.message);
-        });
-
-        const loginTime = new Date().toLocaleString();
-        const loginAlertMail = {
-            from: '"Nimmacart Security" <onboarding@resend.dev>',
-            to: user.email,
-            subject: 'Security Alert: Login Verified 🔐',
-            text: `Hello,\n\nYour Nimmacart login was verified successfully at ${loginTime}.\n\nIf this was not you, please reset your password immediately.`
-        };
-
-        resend.emails.send(loginAlertMail).catch(err => console.error("Login alert email error:", err.message));
-
-        res.json({ message: "Login successful", user: { id: user.id, email: user.email } });
     });
 });
 
