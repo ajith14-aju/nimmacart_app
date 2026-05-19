@@ -333,12 +333,10 @@ app.post('/login', (req, res) => {
 
         const user = dbResult.rows[0];
         const oneTimeCode = crypto.randomInt(100000, 1000000).toString();
-        
-        // This creates a standard ISO timestamp string that database engines read natively as UTC
-        const expiry = new Date(Date.now() + 10 * 60 * 1000).toISOString();
 
-        const updateSql = "UPDATE users SET two_fa_code = $1, two_fa_expires = $2 WHERE email = $3";
-        db.query(updateSql, [oneTimeCode, expiry, email], updateErr => {
+        // Let PostgreSQL generate the 10-minute interval itself securely
+        const updateSql = "UPDATE users SET two_fa_code = $1, two_fa_expires = NOW() + INTERVAL '10 minutes' WHERE email = $2";
+        db.query(updateSql, [oneTimeCode, email], updateErr => {
             if (updateErr) {
                 console.error("2FA save error:", updateErr.message);
                 return res.status(500).json({ message: "Failed to start two-factor authentication" });
@@ -361,14 +359,25 @@ app.post('/verify-2fa', (req, res) => {
     const { email, code } = req.body;
     if (!email || !code) return res.status(400).json({ message: "Email and 2FA code are required" });
 
-    const sql = "SELECT id, email FROM users WHERE email = $1 AND two_fa_code = $2 AND two_fa_expires > (NOW() AT TIME ZONE 'utc')";
+    // Look for the user based simply on email and code matches
+    const sql = "SELECT id, email, two_fa_expires FROM users WHERE email = $1 AND two_fa_code = $2";
     db.query(sql, [email, code], (err, result) => {
         if (err) return res.status(500).json({ message: "Database error" });
         if (!result || !result.rows || result.rows.length === 0) {
-            return res.status(401).json({ message: "Invalid or expired 2FA code" });
+            return res.status(401).json({ message: "Invalid 2FA code" });
         }
 
         const user = result.rows[0];
+        
+        // Convert database time into a standardized Unix epoch millisecond metric
+        const expiryTime = new Date(user.two_fa_expires).getTime();
+        const currentTime = Date.now();
+
+        // Evaluate code expiration cleanly in server memory
+        if (currentTime > expiryTime) {
+            return res.status(401).json({ message: "Your 2FA code has expired. Please log in again." });
+        }
+
         const clearSql = "UPDATE users SET two_fa_code = NULL, two_fa_expires = NULL WHERE email = $1";
         db.query(clearSql, [email], clearErr => {
             if (clearErr) console.error("Failed to clear 2FA code:", clearErr.message);
@@ -376,19 +385,15 @@ app.post('/verify-2fa', (req, res) => {
 
         const loginTime = new Date().toLocaleString();
         const loginAlertMail = {
-            from: '"Nimmacart Security" <ajithaju7090@gmail.com>',
+            from: '"Nimmacart Security" <onboarding@resend.dev>',
             to: user.email,
             subject: 'Security Alert: Login Verified 🔐',
             text: `Hello,\n\nYour Nimmacart login was verified successfully at ${loginTime}.\n\nIf this was not you, please reset your password immediately.`
         };
 
-        transporter.sendMail(loginAlertMail, err => {
-            if (err) {
-                console.error("Login alert email error:", err.message);
-            }
-        });
+        resend.emails.send(loginAlertMail).catch(err => console.error("Login alert email error:", err.message));
 
-        res.json({ message: "Login successful", user });
+        res.json({ message: "Login successful", user: { id: user.id, email: user.email } });
     });
 });
 
