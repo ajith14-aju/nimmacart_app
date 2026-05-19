@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 const { Pool } = require('pg');
 const crypto = require('crypto');
 const os = require('os');
@@ -94,18 +94,10 @@ db.connect(err => {
 // 2. TRANSACTIONAL EMAIL ARCHITECTURE (NODEMAILER)
 // =========================================================================
 
-const transporter = nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 465,
-    secure: true, 
-    auth: {
-        user: 'ajithaju7090@gmail.com', 
-        pass: 'qzwthdkdermlsgqs'      // Active 16-character Google App Password
-    },
-    tls: {
-        rejectUnauthorized: false 
-    }
-});
+
+
+// Initialize Resend with your token directly
+const resend = new Resend('re_jggqTDhv_P2nAbpTdAyH48nawQYn2vXDg');
 
 // =========================================================================
 // 3. CORE CATALOG MANIPULATION ROUTES (PRODUCTS)
@@ -286,17 +278,12 @@ app.post('/checkout', (req, res) => {
 
     const orderSummary = cartItems.map(item => `- ${item.name}: ₹${item.price}`).join('\n');
     
-    const customerReceiptMail = {
-        from: '"Nimmacart Payment Centre" <ajithaju7090@gmail.com>',
+    resend.emails.send({
+        from: 'Nimmacart <onboarding@resend.dev>',
         to: email,
-        bcc: 'ajithsn6360@gmail.com', 
         subject: 'Order Successfully Placed & Verified! 💎',
         text: `Hello,\n\nYour invoice order calculation statement has processed successfully.\n\nSummary Content:\n${orderSummary}\n\nAggregate Pricing Settlement: ₹${totalAmount}\nPayment Method Choice: [${paymentMethod}]\n\nLogistic Destination Routing:\n${shippingAddress}\n\nThank you for choosing Nimmacart!`
-    };
-
-    transporter.sendMail(customerReceiptMail, (error) => {
-        if (error) console.error("Billing verification delivery error:", error.message);
-    });
+    }).catch(err => console.error("Billing email error:", err.message));
 
     const orderSql = "INSERT INTO orders (user_email, total_amount, shipping_address, payment_method) VALUES ($1, $2, $3, $4) RETURNING id";
     db.query(orderSql, [email, totalAmount, shippingAddress, paymentMethod], (orderErr, orderResult) => {
@@ -356,20 +343,13 @@ app.post('/login', (req, res) => {
                 return res.status(500).json({ message: "Failed to start two-factor authentication" });
             }
 
-            const codeMail = {
-                from: '"Nimmacart Security" <ajithaju7090@gmail.com>',
+            resend.emails.send({
+                from: 'Nimmacart Security <onboarding@resend.dev>',
                 to: user.email,
                 subject: 'Your Nimmacart Two-Factor Authentication Code',
                 text: `Your Nimmacart verification code is: ${oneTimeCode}\n\nEnter this code on the website within 10 minutes to complete login.`
-            };
-
-            transporter.sendMail(codeMail, err => {
-                if (err) {
-                    console.error("2FA email send error:", err.message);
-                } else {
-                    console.log(`Sent 2FA code to ${user.email}`);
-                }
-            });
+            }).then(() => console.log(`Sent 2FA code to ${user.email}`))
+              .catch(err => console.error("2FA email send error:", err.message));
 
             res.json({ needs2fa: true, message: "A 2FA code was sent to your email." });
         });
@@ -448,8 +428,8 @@ app.post('/forgot-password', (req, res) => {
             }
             const resetLink = `${frontendOrigin}${frontendPath}?token=${token}`;
 
-            const resetMail = {
-                from: '"Nimmacart Support" <ajithaju7090@gmail.com>',
+            resend.emails.send({
+                from: 'Nimmacart Support <onboarding@resend.dev>',
                 to: email,
                 subject: 'Password Reset Request 🔑',
                 text: `You requested a password reset for your Nimmacart account.\n\nPlease open this link in your browser to reset your password:\n\n${resetLink}`,
@@ -463,11 +443,7 @@ app.post('/forgot-password', (req, res) => {
                         <p style="font-size: 11px; color: #94a3b8;">If the button doesn't work, copy-paste this link: <br><a href="${resetLink}" target="_blank" style="color: #2563eb;">${resetLink}</a></p>
                     </div>
                 `
-            };
-
-            transporter.sendMail(resetMail, (mailErr) => {
-                if (mailErr) console.error("Reset email delivery failed:", mailErr.message);
-            });
+            }).catch(mailErr => console.error("Reset email delivery failed:", mailErr.message));
 
             res.json({ message: "If that email exists, a reset link has been sent." });
         });
