@@ -342,15 +342,22 @@ app.post('/login', (req, res) => {
                 return res.status(500).json({ message: "Failed to start two-factor authentication" });
             }
 
+            // We use 'await' or keep it nested to guarantee the transmission fires before replying to mobile
             resend.emails.send({
                 from: 'Nimmacart Security <onboarding@resend.dev>',
                 to: user.email,
                 subject: 'Your Nimmacart Two-Factor Authentication Code',
                 text: `Your Nimmacart verification code is: ${oneTimeCode}\n\nEnter this code on the website within 10 minutes to complete login.`
-            }).then(() => console.log(`Sent 2FA code to ${user.email}`))
-              .catch(err => console.error("2FA email send error:", err.message));
-
-            res.json({ needs2fa: true, message: "A 2FA code was sent to your email." });
+            })
+            .then(() => {
+                console.log(`Sent 2FA code to ${user.email}`);
+                // Only send the success response to the phone AFTER the email is successfully sent to Resend
+                return res.json({ needs2fa: true, message: "A 2FA code was sent to your email." });
+            })
+            .catch(err => {
+                console.error("2FA email send error:", err.message);
+                return res.status(500).json({ message: "Email delivery system failed. Please try again." });
+            });
         });
     });
 });

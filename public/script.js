@@ -67,7 +67,10 @@ function nimmacart() {
         /**
          * Check whether backend API is reachable from this client (mobile/laptop)
          */
-        async checkBackend(timeout = 3000) {
+        /**
+         * Check whether backend API is reachable from this client (mobile/laptop)
+         */
+        async checkBackend(timeout = 10000) { // Increased to 10 seconds for stable mobile wakeups
             try {
                 const controller = new AbortController();
                 const id = setTimeout(() => controller.abort(), timeout);
@@ -179,6 +182,9 @@ function nimmacart() {
             }
 
             try {
+                // Inform the mobile user that the system is processing their request
+                this.notify("Verifying credentials... please wait.", "success");
+
                 const res = await fetch(`${this.apiUrl}/login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -195,7 +201,7 @@ function nimmacart() {
                     this.authMode = '2fa';
                     this.pendingTwoFactorEmail = this.userForm.email;
                     this.userForm.password = '';
-                    this.notify('2FA code sent to your email.');
+                    this.notify('2FA code successfully dispatched to your inbox!');
                     return;
                 }
 
