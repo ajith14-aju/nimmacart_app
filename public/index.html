@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en" x-data="nimmacart()" :class="{ 'dark': darkMode }">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nimmacart | Ultimate Store</title>
+    
+    <!-- Scripts & Stylesheets -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <script src="script.js"></script>
+    
+    <!-- Tailwind Configuration Configuration -->
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: { extend: { colors: { darkBg: '#0f172a', darkCard: '#1e293b' } } }
+        }
+    </script>
+</head>
+<body class="bg-gray-50 dark:bg-darkBg text-slate-900 dark:text-slate-100 min-h-screen flex flex-col">
+
+    <!-- =========================================================================
+         TOAST NOTIFICATIONS
+         ========================================================================= -->
+    <div class="fixed bottom-5 right-5 toast-container flex flex-col gap-3">
+        <template x-for="note in toasts" :key="note.id">
+            <div x-transition:enter="transition ease-out duration-300"
+                 x-transition:enter-start="opacity-0 translate-x-10"
+                 x-transition:enter-end="opacity-100 translate-x-0"
+                 class="text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-4 font-bold min-w-[300px] border-b-4"
+                 :class="note.type === 'success' ? 'bg-green-600 border-green-800' : 'bg-red-600 border-red-800'">
+                
+                <!-- Status Icon -->
+                <div class="bg-white/20 p-2 rounded-lg">
+                    <i class="fa text-lg" :class="note.type === 'success' ? 'fa-check-circle' : 'fa-triangle-exclamation'"></i>
+                </div>
+                
+                <!-- Toast Message -->
+                <div class="flex-1">
+                    <p class="text-xs opacity-80 uppercase tracking-widest" x-text="note.type === 'success' ? 'Success' : 'Attention'"></p>
+                    <p class="text-sm" x-text="note.message"></p>
+                </div>
+            </div>
+        </template>
+    </div>
+
+    <!-- =========================================================================
+         NAVIGATION HEADER
+         ========================================================================= -->
+    <nav class="bg-white dark:bg-darkCard border-b dark:border-slate-700 sticky top-0 z-40 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 h-20 flex justify-between items-center">
+            
+            <!-- Brand Logo -->
+            <div class="flex items-center space-x-2 shrink-0">
+                <div class="bg-orange-600 p-2 rounded-lg"><i class="fa fa-shopping-bag text-white text-xl"></i></div>
+                <span class="text-2xl font-black tracking-tight hidden sm:block">nimma<span class="text-orange-600">cart</span></span>
+            </div>
+
+            <!-- Search & Filter Hub Section -->
+            <div class="flex-1 max-w-xl mx-4 flex flex-col gap-2">
+                <!-- Search Input Bar Wrapper -->
+                <div class="relative">
+                    <input type="text" x-model="searchQuery" placeholder="Search products..." 
+                        class="w-full bg-gray-100 dark:bg-slate-800 border-none rounded-lg py-2.5 px-11 focus:ring-2 focus:ring-orange-500 outline-none">
+                    <i class="fa fa-search absolute left-4 top-3.5 text-gray-400"></i>
+                </div>
+
+                <!-- Category Filter Dropdown Module -->
+                <div class="relative self-start sm:self-auto" x-data="{ openDropdown: false }">
+                    <button @click="openDropdown = !openDropdown" 
+                        class="bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 font-bold text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow-sm hover:bg-gray-50 dark:hover:bg-slate-700 active:scale-95 transition-all">
+                        <i class="fa fa-filter text-orange-600"></i> 
+                        <span>Category: <span class="text-orange-600" x-text="activeCat"></span></span> 
+                        <i class="fa fa-chevron-down text-[10px] opacity-60 transition-transform" :class="openDropdown ? 'rotate-180' : ''"></i>
+                    </button>
+                    
+                    <!-- Dropdown Panel Menu -->
+                    <div x-show="openDropdown" @click.away="openDropdown = false" x-cloak
+                        class="absolute left-0 mt-1 w-52 bg-white dark:bg-darkCard rounded-xl shadow-2xl border border-gray-100 dark:border-slate-700 overflow-hidden z-[50]">
+                        <template x-for="cat in categories">
+                            <button @click="activeCat = cat; openDropdown = false" 
+                                class="w-full text-left px-4 py-2 text-xs font-semibold hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors border-b last:border-b-0 border-gray-100 dark:border-slate-700"
+                                :class="activeCat === cat ? 'text-orange-600 font-bold bg-orange-50/50 dark:bg-orange-950/20' : 'text-slate-600 dark:text-slate-300'"
+                                x-text="cat"></button>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Header Action Controls -->
+            <div class="flex items-center space-x-3 sm:space-x-4">
+                <!-- Dark Mode Toggler -->
+                <button @click="darkMode = !darkMode" class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition">
+                    <i class="fa text-lg" :class="darkMode ? 'fa-sun text-yellow-400' : 'fa-moon text-slate-600'"></i>
+                </button>
+
+                <!-- Admin: Add Product Action Button -->
+                <button @click="showAdmin = true" class="text-sm font-bold text-orange-600 hover:bg-orange-50 px-3 py-2 rounded-lg transition">
+                    <i class="fa fa-plus-circle"></i> <span class="hidden md:inline">Add</span>
+                </button>
+
+                <!-- Guest Login Action Trigger -->
+                <template x-if="!isLoggedIn">
+                    <button @click="showLogin = true" class="bg-blue-600 text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-blue-700 transition">
+                        Login
+                    </button>
+                </template>
+
+                <!-- Authenticated User Dropdown Indicator -->
+                <template x-if="isLoggedIn">
+                    <div class="flex items-center gap-3 bg-blue-50 dark:bg-slate-800 px-3 py-1.5 rounded-full border border-blue-100 dark:border-slate-700">
+                        <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold" 
+                             x-text="currentUser.email[0].toUpperCase()">
+                        </div>
+                        <span class="text-sm font-bold text-blue-900 dark:text-blue-100 hidden lg:block" x-text="currentUser.email"></span>
+                        <button @click="logout()" class="text-red-500 hover:text-red-700 text-xs font-bold ml-2">Logout</button>
+                    </div>
+                </template>
+
+                <!-- Wishlist Toggler Trigger -->
+                <button @click="showWishlist = true" class="relative p-2 group">
+                    <i class="fa fa-heart text-2xl text-red-500 hover:scale-110 transition"></i>
+                    <span class="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] font-bold rounded-full h-5 w-5 flex items-center justify-center border-2 border-white dark:border-slate-800" x-text="wishlist.length"></span>
+                </button>
+
+                <!-- Cart Toggler Trigger -->
+                <button @click="showCart = true" class="relative p-2 group">
+                    <i class="fa fa-shopping-cart text-2xl group-hover:text-orange-600 transition"></i>
+                    <span class="absolute -top-1 -right-1 bg-orange-600 text-white text-[10px] font-bold rounded-full h-5 w-5 flex items-center justify-center border-2 border-white dark:border-slate-800" x-text="cart.length"></span>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- =========================================================================
+         MAIN SITE CONTENT WRAPPER
+         ========================================================================= -->
+    <main class="max-w-7xl mx-auto px-4 py-8 flex-grow w-full flex flex-col">
+        
+        <!-- TOP TRENDING PROMOTIONAL CAROUSEL -->
+        <section x-data="{ 
+            activeSlide: 0, 
+            slides: [
+                { id: 1, title: 'Sony Headphones', price: '₹2,999', tag: 'Limited Deal', image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e', bg: 'bg-gradient-to-r from-orange-500 to-amber-500' },
+                { id: 2, title: 'Apple Watch Series 9', price: '₹3,599', tag: 'Trending Now', image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30', bg: 'bg-gradient-to-r from-blue-600 to-indigo-600' },
+                { id: 3, title: 'Monitor', price: '₹16,999', tag: 'Mega Offer', image: 'https://images.unsplash.com/photo-1527443224154-c4a3942d3acf', bg: 'bg-gradient-to-r from-purple-600 to-pink-600' }
+            ],
+            next() { this.activeSlide = (this.activeSlide + 1) % this.slides.length },
+            prev() { this.activeSlide = (this.activeSlide - 1 + this.slides.length) % this.slides.length },
+            init() { setInterval(() => this.next(), 5000) } 
+        }" class="w-full mb-8 relative rounded-3xl overflow-hidden shadow-lg h-64 sm:h-80 group">
+    
+            <!-- Slides Track Wrapper -->
+            <div class="w-full h-full relative">
+                <template x-for="(slide, index) in slides" :key="slide.id">
+                    <div x-show="activeSlide === index"
+                        x-transition:enter="transition ease-out duration-700 transform"
+                        x-transition:enter-start="opacity-0 translate-x-full"
+                        x-transition:enter-end="opacity-100 translate-x-0"
+                        x-transition:leave="transition ease-in duration-700 transform"
+                        x-transition:leave-start="opacity-100 translate-x-0"
+                        x-transition:leave-end="opacity-0 -translate-x-full"
+                        class="absolute inset-0 w-full h-full flex items-center p-6 sm:p-12 text-white"
+                        :class="slide.bg">
+                
+                        <!-- Slide Metadata Information -->
+                        <div class="flex-1 space-y-3 z-10">
+                            <span class="bg-white/20 px-3 py-1 rounded-full text-xs font-bold tracking-wider uppercase backdrop-blur-sm" x-text="slide.tag"></span>
+                            <h2 class="text-2xl sm:text-4xl font-black tracking-tight leading-tight" x-text="slide.title"></h2>
+                            <p class="text-xl sm:text-2xl font-light">Starting at <span class="font-black" x-text="slide.price"></span></p>
+                            <button class="mt-2 bg-white text-slate-900 px-6 py-2.5 rounded-xl font-bold text-sm shadow-md hover:bg-orange-50 hover:scale-105 active:scale-95 transition-all">
+                                Shop Deal <i class="fa fa-arrow-right ml-1 text-xs"></i>
+                            </button>
+                        </div>
+
+                        <!-- Slide Graphical Cutout Frame -->
+                        <div class="hidden sm:block w-1/3 h-full relative">
+                            <img :src="slide.image" class="w-full h-full object-cover rounded-2xl shadow-2xl transform rotate-3 hover:rotate-0 transition-transform duration-500">
+                        </div>
+                    </div>
+                </template>
+            </div>
+
+            <!-- Carousel Direction Controllers -->
+            <button @click="prev()" class="absolute left-4 top-1/2 -translate-y-1/2 bg-black/30 hover:bg-black/50 backdrop-blur-md text-white h-10 w-10 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                <i class="fa fa-chevron-left"></i>
+            </button>
+            <button @click="next()" class="absolute right-4 top-1/2 -translate-y-1/2 bg-black/30 hover:bg-black/50 backdrop-blur-md text-white h-10 w-10 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                <i class="fa fa-chevron-right"></i>
+            </button>
+
+            <!-- Navigation Pagination Dots Indicator -->
+            <div class="absolute bottom-4 left-1/2 -translate-y-1/2 -translate-x-1/2 flex items-center gap-2 z-20">
+                <template x-for="(slide, index) in slides" :key="slide.id">
+                    <button @click="activeSlide = index" 
+                            class="h-2 rounded-full transition-all duration-300"
+                            :class="activeSlide === index ? 'w-6 bg-white' : 'w-2 bg-white/40'"></button>
+                </template>
+            </div>
+        </section>
+
+        <!-- Dynamic Product Content Grid Area -->
+        <div class="w-full flex flex-col md:flex-row gap-8">
+            <div class="w-full mt-4">
+                <section class="flex-1">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+                        <template x-for="(p, index) in filteredProducts" :key="p.id">
+                            <!-- Staggered Alpine Transition Container Card -->
+                            <div x-show="true"
+                                x-transition:enter="transition ease-out duration-500 transform"
+                                x-transition:enter-start="opacity-0 translate-y-8 scale-95"
+                                x-transition:enter-end="opacity-100 translate-y-0 scale-100"
+                                class="bg-white dark:bg-darkCard rounded-2xl overflow-hidden shadow-md hover:shadow-2xl hover:-translate-y-2 transition-all duration-300 group relative border border-gray-100 dark:border-slate-700"
+                                :style="`animation-delay: ${index * 75}ms; transition-delay: ${index * 40}ms;`">
+                        
+                                <!-- Product Image Frame with Zoom Zoom Effect -->
+                                <div class="h-60 overflow-hidden bg-gray-100 relative">
+                                    <img :src="p.image" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110">
+                            
+                                    <!-- Hover Quick Action Trigger Overlay -->
+                                    <div class="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center gap-2">
+                                        <button @click="addToCart(p)" class="bg-white text-slate-900 p-3 rounded-full shadow-xl hover:bg-orange-600 hover:text-white transition-colors">
+                                            <i class="fa fa-shopping-cart"></i>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Product Info Card Meta Details -->
+                                <div class="p-5">
+                                    <h3 class="font-bold text-lg group-hover:text-orange-600 transition-colors" x-text="p.name"></h3>
+                            
+                                    <!-- Dynamic Star Rating Processing Module -->
+                                    <div class="flex items-center gap-1 mt-2">
+                                        <template x-for="i in [1, 2, 3, 4, 5]">
+                                            <i class="fa-star text-sm" 
+                                               :class="p.rating >= i ? 'fa-solid text-amber-500' : (p.rating >= i - 0.5 ? 'fa-solid fa-star-half-stroke text-amber-500' : 'fa-regular text-gray-300')">
+                                            </i>
+                                        </template>
+                                        <span class="text-xs text-gray-400 font-semibold ml-1" x-text="Number(p.rating).toFixed(1)"></span>
+                                    </div>
+
+                                    <!-- Bottom Info Block: Price and Wishlist -->
+                                    <div class="flex items-center justify-between mt-5">
+                                        <span class="text-2xl font-black text-slate-900 dark:text-white">₹<span x-text="p.price"></span></span>
+                                        <div class="flex items-center gap-2">
+                                            <button @click="toggleWishlist(p)" 
+                                                class="p-2 rounded-full transition-all duration-300 active:scale-125"
+                                                :class="isInWishlist(p.id) ? 'bg-red-50 text-red-500' : 'bg-gray-50 text-gray-400 hover:text-red-400'">
+                                                <i class="fa-solid fa-heart text-xl"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <!-- =========================================================================
+         MODALS & SIDEBARS INJECTION PORTS
+         ========================================================================= -->
+
+    <!-- ADMIN PANEL OVERLAY MODAL -->
+    <div x-show="showAdmin" x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0 scale-90" x-transition:enter-end="opacity-100 scale-100" 
+         x-cloak class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        <div @click.away="showAdmin = false" class="bg-white dark:bg-darkCard rounded-3xl w-full max-w-md p-8 shadow-2xl">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold text-slate-800 dark:text-white">New Product</h2>
+                <button @click="showAdmin = false" class="text-gray-400 hover:text-gray-600"><i class="fa fa-times"></i></button>
+            </div>
+            
+            <!-- Admin Interactive Ingestion Form -->
+            <div class="space-y-4">
+                <div>
+                    <label class="text-xs font-bold uppercase text-gray-500 ml-1">Product Name</label>
+                    <input x-model="newP.name" type="text" placeholder="e.g. Wireless Headphones" 
+                        class="w-full p-3 mt-1 rounded-xl border dark:border-slate-700 dark:bg-slate-800 outline-none focus:ring-2 focus:ring-orange-500">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-xs font-bold uppercase text-gray-500 ml-1">Price (₹)</label>
+                        <input x-model="newP.price" type="number" placeholder="999" 
+                            class="w-full p-3 mt-1 rounded-xl border dark:border-slate-700 dark:bg-slate-800 outline-none focus:ring-2 focus:ring-orange-500">
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold uppercase text-gray-500 ml-1">Category</label>
+                        <select x-model="newP.category" class="w-full p-3 mt-1 rounded-xl border dark:border-slate-700 dark:bg-slate-800 outline-none">
+                            <template x-for="cat in categories.filter(c => c !== 'All Products')">
+                                <option :value="cat" x-text="cat"></option>
+                            </template>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="text-xs font-bold uppercase text-gray-500 ml-1">Initial Rating Score (0.0 - 5.0)</label>
+                    <input x-model="newP.rating" type="number" step="0.1" min="0" max="5" placeholder="4.5" 
+                        class="w-full p-3 mt-1 rounded-xl border dark:border-slate-700 dark:bg-slate-800 outline-none focus:ring-2 focus:ring-orange-500">
+                </div>
+                <div>
+                    <label class="text-xs font-bold uppercase text-gray-500 ml-1">Image URL</label>
+                    <input x-model="newP.image" type="text" placeholder="https://images.com/product.jpg" 
+                        class="w-full p-3 mt-1 rounded-xl border dark:border-slate-700 dark:bg-slate-800 outline-none focus:ring-2 focus:ring-orange-500">
+                </div>
+                <button @click="addProduct()" 
+                    class="w-full bg-orange-600 hover:bg-orange-700 text-white py-4 rounded-xl font-bold shadow-lg shadow-orange-600/20 active:scale-95 transition-all mt-4">
+                    List Product in Store
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SHOPPING BAG DRAW-SLIDE SIDEBAR -->
+    <div x-show="showCart" x-cloak class="fixed inset-0 z-50 flex justify-end">
+        <div @click="showCart = false" class="absolute inset-0 bg-black/40"></div>
+        <div class="relative w-80 bg-white dark:bg-darkCard h-full p-6 shadow-2xl flex flex-col">
+            <h2 class="text-2xl font-bold mb-6">Shopping Bag</h2>
+            
+            <!-- Items Collection List -->
+            <div class="flex-1 overflow-y-auto space-y-4">
+                <template x-for="item in cart" :key="item.cart_item_id">
+                    <div class="flex items-center gap-3 p-3 bg-gray-50 dark:bg-slate-800 rounded-xl">
+                        <img :src="item.image" class="w-12 h-12 rounded object-cover">
+                        <div class="flex-1">
+                            <p class="font-bold text-xs" x-text="item.name"></p>
+                            <p class="text-orange-600 font-bold">₹<span x-text="item.price"></span></p>
+                        </div>
+                        <button @click="removeFromCart(item.cart_item_id)" class="text-red-500"><i class="fa fa-trash"></i></button>
+                    </div>
+                </template>
+            </div>
+            
+            <!-- Checkout Activation Calculations Bottom Area -->
+            <div class="border-t pt-4 mt-4">
+                <p class="text-xl font-bold">Total: ₹<span x-text="totalPrice"></span></p>
+                <button @click="showCart = false; showCheckout = true" 
+                        class="w-full bg-orange-600 hover:bg-orange-700 text-white py-3 rounded-xl font-bold mt-4 transition-all">Proceed to Checkout</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- WISHLIST SIDEBAR SYSTEM DRAW-SLIDE -->
+    <div x-show="showWishlist" x-cloak class="fixed inset-0 z-50 flex justify-end">
+        <div @click="showWishlist = false" class="absolute inset-0 bg-black/40"></div>
+        <div class="relative w-80 bg-white dark:bg-darkCard h-full p-6 shadow-2xl flex flex-col">
+            <h2 class="text-2xl font-bold mb-6">My Wishlist</h2>
+            
+            <!-- Saved Items Collection List -->
+            <div class="flex-1 overflow-y-auto space-y-4">
+                <template x-if="wishlist.length === 0">
+                    <p class="text-center text-gray-500 mt-10">Your wishlist is empty.</p>
+                </template>
+                <template x-for="item in wishlist" :key="item.wishlist_id">
+                    <div class="flex items-center gap-3 p-3 bg-gray-50 dark:bg-slate-800 rounded-xl">
+                        <img :src="item.image" class="w-12 h-12 rounded object-cover">
+                        <div class="flex-1">
+                            <p class="font-bold text-xs" x-text="item.name"></p>
+                            <p class="text-blue-600 font-bold">₹<span x-text="item.price"></span></p>
+                        </div>
+                        <div class="flex flex-col gap-2">
+                            <button @click="moveFromWishToCart(item)" class="text-green-500"><i class="fa fa-cart-plus"></i></button>
+                            <button @click="toggleWishlist(item)" class="text-red-500"><i class="fa fa-trash"></i></button>
+                        </div>
+                    </div>
+                </template>
+            </div>
+            <button @click="showWishlist = false" class="w-full border border-gray-300 py-3 rounded-xl font-bold mt-4">Close</button>
+        </div>
+    </div>
+
+    <!-- ACCOUNT PROFILE ACCESS CONTROL OVERLAY MODAL (LOGIN/SIGNUP) -->
+    <div x-show="showLogin" x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0 scale-90" x-transition:enter-end="opacity-100 scale-100" 
+         x-cloak class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        <div @click.away="showLogin = false" :class="{ 'animate-shake': errorShake }" class="bg-white dark:bg-darkCard rounded-3xl w-full max-w-md p-8 shadow-2xl relative">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold text-slate-800 dark:text-white">Nimmacart Account</h2>
+                <button @click="showLogin = false" class="text-gray-400 hover:text-red-500 transition-colors">
+                    <i class="fa fa-times text-xl"></i>
+                </button>
+            </div>
+            
+            <!-- Auth Capture Form Fields -->
+            <div class="space-y-4">
+                <div>
+                    <!-- 1. Email Field: Show for all views EXCEPT pure reset phase -->
+                    <template x-if="authMode !== 'reset'">
+                        <div class="mb-3">
+                            <label class="text-xs font-bold uppercase text-gray-400 ml-1">Email Address</label>
+                            <input x-model="userForm.email" type="email" placeholder="name@example.com" 
+                                class="w-full p-3 mt-1 rounded-xl border dark:border-slate-700 dark:bg-slate-800 outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                    </template>
+
+                    <!-- 2. Password Field: Hide during basic forgot email query request -->
+                    <template x-if="authMode !== 'forgot' && authMode !== '2fa'">
+                        <div>
+                            <label class="text-xs font-bold uppercase text-gray-400 ml-1">Password</label>
+                            <div class="relative">
+                                <input x-model="userForm.password" :type="showPassword ? 'text' : 'password'" placeholder="Must have at least 6 characters" 
+                                    class="w-full p-3 mt-1 rounded-xl border dark:border-slate-700 dark:bg-slate-800 outline-none focus:ring-2 focus:ring-blue-500 pr-10">
+                                <button @click="showPassword = !showPassword" type="button" class="absolute right-3 top-4 text-gray-400 hover:text-gray-600 transition-colors">
+                                    <i :class="showPassword ? 'fa fa-eye-slash' : 'fa fa-eye'"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </template>
+
+                    <template x-if="authMode === '2fa'">
+                        <div>
+                            <p class="text-xs text-slate-500 mb-2">Enter the 6-digit code sent to <span class="font-semibold" x-text="pendingTwoFactorEmail"></span>.</p>
+                            <label class="text-xs font-bold uppercase text-gray-400 ml-1">2FA Code</label>
+                            <input x-model="twoFactorCode" type="text" maxlength="6" placeholder="123456"
+                                class="w-full p-3 mt-1 rounded-xl border dark:border-slate-700 dark:bg-slate-800 outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                    </template>
+                </div>
+
+                <div>
+                    <!-- View A: Standard Login/Signup Modes Actions -->
+                    <template x-if="authMode === 'login' || authMode === 'signup'">
+                        <div>
+                            <div class="text-right mb-2">
+                                <button @click="authMode = 'forgot'" class="text-xs font-bold text-blue-500 hover:underline mb-2">Forgot Password?</button>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <button @click="authMode = 'login'; handleLogin()" class="bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-xl font-bold active:scale-95 transition-all shadow-lg shadow-blue-600/20">Login</button>
+                                <button @click="authMode = 'signup'; handleSignup()" class="bg-orange-600 hover:bg-orange-700 text-white py-4 rounded-xl font-bold active:scale-95 transition-all shadow-lg shadow-orange-600/20">Sign Up</button>
+                            </div>
+                        </div>
+                    </template>
+
+                <!-- View B: Forgot Request Actions Mode -->
+                <template x-if="authMode === 'forgot'">
+                    <div class="space-y-2">
+                        <button @click="handleForgotPassword()" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-xl font-bold active:scale-95 transition-all shadow-lg">
+                            Send Reset Link
+                        </button>
+                        <button @click="authMode = 'login'" class="w-full text-center text-xs font-bold text-gray-400 hover:underline">
+                            Back to Login
+                        </button>
+                    </div>
+                </template>
+
+                <!-- View C: New Password Reset Submission Mode -->
+                <template x-if="authMode === 'reset'">
+                    <div>
+                        <button @click="handleResetPassword()" class="w-full bg-green-600 hover:bg-green-700 text-white py-4 rounded-xl font-bold active:scale-95 transition-all shadow-lg">
+                            Save New Password
+                        </button>
+                    </div>
+                </template>
+
+                <template x-if="authMode === '2fa'">
+                    <div class="space-y-2">
+                        <button @click="handleVerifyTwoFactor()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-xl font-bold active:scale-95 transition-all shadow-lg">
+                            Verify Code
+                        </button>
+                        <button @click="authMode = 'login'; pendingTwoFactorEmail = ''; twoFactorCode = '';" class="w-full text-center text-xs font-bold text-gray-400 hover:underline">
+                            Back to Login
+                        </button>
+                    </div>
+                </template>
+                </div>
+            </div>
+
+                <p class="text-center text-xs text-gray-400 mt-4 italic">
+                    New here? Sign up first to create your account.
+                </p>
+                <p class="text-center text-[10px] text-red-400/80 mt-1 max-w-xs mx-auto">
+                    * Password requires 6-15 characters with uppercase, lowercase, numbers, and symbols (@$!%*?&).
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- TWO-STEP INTEGRATED CHECKOUT SYSTEM MODAL -->
+    <div x-show="showCheckout" x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100" 
+         x-cloak class="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        
+        <div @click.away="if(checkoutStep===1) showCheckout = false" class="bg-white dark:bg-darkCard rounded-3xl w-full max-w-2xl p-8 shadow-2xl max-h-[90vh] overflow-y-auto">
+            
+            <!-- Checkout Modal Header Title -->
+            <div class="flex justify-between items-center mb-6 border-b pb-4 dark:border-slate-700">
+                <div>
+                    <h2 class="text-2xl font-black text-slate-800 dark:text-white">Secure Order Gate</h2>
+                    <!-- Step Progress Breadcrumb Trackers -->
+                    <div class="flex items-center gap-2 mt-1 text-xs font-bold text-gray-400">
+                        <span :class="checkoutStep === 1 ? 'text-orange-600' : 'text-green-600'"><i class="fa" :class="checkoutStep > 1 ? 'fa-check-circle' : 'fa-truck'"></i> Shipping</span>
+                        <i class="fa fa-chevron-right text-[10px]"></i>
+                        <span :class="checkoutStep === 2 ? 'text-orange-600 font-black' : ''"><i class="fa fa-credit-card"></i> Payment processing</span>
+                    </div>
+                </div>
+                <button @click="showCheckout = false" class="text-gray-400 hover:text-red-500 transition-colors">
+                    <i class="fa fa-times text-xl"></i>
+                </button>
+            </div>
+
+            <!-- Double Column Checkout Panel Engine Context -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <!-- Left Grid Segment: Purchase Summary Verification -->
+                <div class="space-y-4">
+                    <h3 class="font-bold text-sm uppercase tracking-wider text-gray-400">Review Items</h3>
+                    <div class="space-y-3 max-h-60 overflow-y-auto pr-2">
+                        <template x-for="item in cart" :key="item.cart_item_id">
+                            <div class="flex items-center gap-3 p-2 bg-gray-50 dark:bg-slate-800 rounded-xl">
+                                <img :src="item.image" class="w-10 h-10 rounded object-cover">
+                                <div class="flex-1 min-w-0">
+                                    <p class="font-bold text-xs truncate text-slate-700 dark:text-slate-200" x-text="item.name"></p>
+                                    <p class="text-orange-600 font-black text-xs">₹<span x-text="item.price"></span></p>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                    <div class="pt-4 border-t dark:border-slate-700">
+                        <p class="text-xl font-black text-slate-800 dark:text-white">Grand Total: <span class="text-orange-600">₹<span x-text="totalPrice"></span></span></p>
+                    </div>
+                </div>
+
+                <!-- Right Grid Segment: Multi-step Dynamic Ingestion Forms -->
+                <div class="flex flex-col justify-between space-y-4 min-h-[300px]">
+                    
+                    <!-- STEP 1 ENGINE WRAPPER: SHIPPING INFORMATION DATA -->
+                    <div x-show="checkoutStep === 1" class="space-y-3">
+                        <h3 class="font-bold text-sm uppercase tracking-wider text-gray-400">Delivery Destination</h3>
+                        <label class="text-xs font-bold text-slate-500 uppercase ml-1">Complete Address Details</label>
+                        <textarea x-model="shippingAddress" rows="5" placeholder="Enter house number, street, city, and pincode..."
+                            class="w-full p-3 text-sm rounded-xl border dark:border-slate-700 dark:bg-slate-800 outline-none focus:ring-2 focus:ring-orange-500 resize-none"></textarea>
+                        
+                        <button @click="goToPayment()"
+                            class="w-full bg-orange-600 hover:bg-orange-700 text-white py-3.5 rounded-xl font-bold shadow-lg shadow-orange-600/20 active:scale-95 transition-all mt-4">
+                            Proceed to Payment <i class="fa fa-arrow-right ml-1 text-xs"></i>
+                        </button>
+                    </div>
+
+                    <!-- STEP 2 ENGINE WRAPPER: FINANCIAL DISBURSEMENT OPTIONS -->
+                    <div x-show="checkoutStep === 2" class="space-y-4">
+                        <h3 class="font-bold text-sm uppercase tracking-wider text-gray-400">Select Payment Method</h3>
+                        
+                        <div class="space-y-2">
+                            <!-- UPI Gateway Selection Segment -->
+                            <label class="flex items-center justify-between p-3 border dark:border-slate-700 rounded-xl cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors">
+                                <div class="flex items-center gap-3">
+                                    <input type="radio" x-model="paymentMethod" value="UPI" class="text-orange-600 focus:ring-orange-500 h-4 w-4">
+                                    <span class="text-sm font-bold">UPI / QR (GPay, PhonePe)</span>
+                                </div>
+                                <i class="fa-brands fa-google-pay text-2xl text-blue-600"></i>
+                            </label>
+                            
+                            <!-- Debit/Credit Card Selection Segment -->
+                            <label class="flex items-center justify-between p-3 border dark:border-slate-700 rounded-xl cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors">
+                                <div class="flex items-center gap-3">
+                                    <input type="radio" x-model="paymentMethod" value="CARD" class="text-orange-600 focus:ring-orange-500 h-4 w-4">
+                                    <span class="text-sm font-bold">Credit or Debit Card</span>
+                                </div>
+                                <i class="fa fa-credit-card text-lg text-slate-500"></i>
+                            </label>
+                            
+                            <!-- COD Option Selection Segment -->
+                            <label class="flex items-center justify-between p-3 border dark:border-slate-700 rounded-xl cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors">
+                                <div class="flex items-center gap-3">
+                                    <input type="radio" x-model="paymentMethod" value="COD" class="text-orange-600 focus:ring-orange-500 h-4 w-4">
+                                    <span class="text-sm font-bold">Cash on Delivery (COD)</span>
+                                </div>
+                                <i class="fa fa-money-bill-wave text-lg text-green-600"></i>
+                            </label>
+                        </div>
+
+                        <!-- Wizard Interaction Control Base Buttons -->
+                        <div class="flex gap-2 pt-2">
+                            <button @click="checkoutStep = 1" 
+                                class="bg-gray-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-4 rounded-xl text-sm font-bold hover:bg-gray-200 transition-all">
+                                <i class="fa fa-arrow-left"></i> Back
+                            </button>
+                            <button @click="processCheckout()"
+                                class="flex-1 bg-green-600 hover:bg-green-700 text-white py-3.5 rounded-xl font-bold shadow-lg shadow-green-600/20 active:scale-95 transition-all">
+                                <i class="fa fa-lock mr-1"></i> Authorize ₹<span x-text="totalPrice"></span>
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- =========================================================================
+         GLOBAL SITE FOOTER
+         ========================================================================= -->
+    <footer class="bg-white dark:bg-darkCard border-t dark:border-slate-700 mt-12">
+        <div class="max-w-7xl mx-auto px-4 py-12">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-12">
+                
+                <!-- Info Column -->
+                <div class="space-y-4">
+                    <div class="flex items-center space-x-2">
+                        <div class="bg-orange-600 p-1.5 rounded-lg"><i class="fa fa-shopping-bag text-white text-sm"></i></div>
+                        <span class="text-xl font-black tracking-tight">nimma<span class="text-orange-600">cart</span></span>
+                    </div>
+                    <p class="text-gray-500 dark:text-gray-400 text-sm leading-relaxed">
+                        NimmaCart is your ultimate destination for the latest gadgets, fashion, and home essentials. 
+                    </p>
+                </div>
+                
+                <!-- Shop Navigation Column -->
+                <div>
+                    <h4 class="font-bold mb-4 text-slate-800 dark:text-white uppercase text-xs tracking-widest">Shop Categories</h4>
+                    <ul class="space-y-2 text-sm text-gray-500 dark:text-gray-400">
+                        <template x-for="cat in categories.filter(c => c !== 'All Products')">
+                            <li><a href="#" @click.prevent="activeCat = cat" class="hover:text-orange-600 transition" x-text="cat"></a></li>
+                        </template>
+                    </ul>
+                </div>
+                
+                <!-- Social Connect Channels Column -->
+                <div>
+                    <h4 class="font-bold mb-4 text-slate-800 dark:text-white uppercase text-xs tracking-widest">Connect with Us</h4>
+                    <div class="flex space-x-4 mb-4">
+                        <a href="#" class="h-10 w-10 rounded-full bg-gray-100 dark:bg-slate-800 flex items-center justify-center hover:bg-orange-600 hover:text-white transition"><i class="fab fa-instagram"></i></a>
+                        <a href="#" class="h-10 w-10 rounded-full bg-gray-100 dark:bg-slate-800 flex items-center justify-center hover:bg-orange-600 hover:text-white transition"><i class="fab fa-twitter"></i></a>
+                        <a href="#" class="h-10 w-10 rounded-full bg-gray-100 dark:bg-slate-800 flex items-center justify-center hover:bg-orange-600 hover:text-white transition"><i class="fab fa-github"></i></a>
+                    </div>
+                    <p class="text-xs text-gray-400">Email: support@nimmacart.com</p>
+                </div>
+            </div>
+            
+            <!-- Bottom Legal Credits and Disclaimers Area -->
+            <div class="border-t dark:border-slate-700 mt-12 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
+                <p class="text-gray-400 text-xs">&copy; <span x-text="new Date().getFullYear()"></span> **NimmaCart Ultimate Store**. All rights reserved.</p>
+                <div class="flex items-center space-x-6 text-xs text-gray-400">
+                    <a href="#" class="hover:text-orange-600">Privacy Policy</a>
+                    <a href="#" class="hover:text-orange-600">Terms of Service</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,98 @@
+/* =========================================================================
+   NIMMACART CORE LAYOUT AND STRUCTURAL ARCHITECTURE
+   ========================================================================= */
+
+/**
+ * Ensures contextual positioning blocks inside navigation hubs
+ */
+nav .relative {
+    position: relative;
+}
+
+/**
+ * Prevents Alpine.js uninitialized template flashing layout bugs
+ */
+[x-cloak] { 
+    display: none !important; 
+}
+
+
+/* =========================================================================
+   ANIMATION KEYFRAMES & TRANSITION TIMINGS
+   ========================================================================= */
+
+/**
+ * Keyframe Definition: Smooth Hardware-Accelerated Fade and Rise
+ */
+@keyframes fadeInUp {
+    from { 
+        opacity: 0;
+        transform: translateY(24px) scale(0.97); 
+    }
+    to { 
+        opacity: 1; 
+        transform: translateY(0) scale(1); 
+    }
+}
+
+/**
+ * Keyframe Definition: Validation Disruption/Error Alert Action
+ */
+@keyframes shake {
+    0%, 100% { 
+        transform: translateX(0); 
+    }
+    25% { 
+        transform: translateX(-8px); 
+    }
+    75% { 
+        transform: translateX(8px); 
+    }
+}
+
+
+/* =========================================================================
+   HARDWARE ACCELERATION & GLOBAL ANIMATION CLASSES
+   ========================================================================= */
+
+/**
+ * Optimized Product Grid Staggered Reveal Animation Vector
+ */
+.product-animate {
+    will-change: transform, opacity;
+    animation: fadeInUp 0.5s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+/**
+ * Account Validation Failure Structural Shake Behavior
+ */
+.animate-shake {
+    animation: shake 0.4s ease-in-out;
+}
+
+/**
+ * Carousel Slide Transition Frame Isolation Layer
+ */
+[x-show] {
+    will-change: transform, opacity;
+}
+
+/**
+ * Forces GPU Processing Units Rendering Engine on Matrix Modifications
+ */
+.transform {
+    transform-style: preserve-3d;
+    backface-visibility: hidden;
+}
+
+
+/* =========================================================================
+   NOTIFICATION ELEMENTS OVERRIDES
+   ========================================================================= */
+
+/**
+ * Positions alert containers clearly on top of absolute modals
+ */
+.toast-container {
+    z-index: 9999 !important;
+}
