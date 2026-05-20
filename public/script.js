@@ -106,8 +106,8 @@ function nimmacart() {
                 return `http://localhost:3000`;
             }
 
-            // If running live on Render, use the current domain name automatically
-            return `${protocol}//${host}`;
+            // Use the current domain name and port automatically for deployed environments
+            return `${protocol}//${host}${port ? `:${port}` : ''}`;
         },
 
         // =========================================================================

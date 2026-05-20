@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
-const { Resend } = require('resend');
+const nodemailer = require('nodemailer');
 const { Pool } = require('pg');
 const crypto = require('crypto');
 const os = require('os');
@@ -84,8 +84,32 @@ db.connect(err => {
 
 
 
-// Initialize Resend with your token directly
-const resend = new Resend('re_jggqTDhv_P2nAbpTdAyH48nawQYn2vXDg');
+const smtpOptions = {
+    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    port: parseInt(process.env.SMTP_PORT, 10) || 587,
+    secure: process.env.SMTP_SECURE === 'true',
+    auth: {
+        user: process.env.SMTP_USER || 'ajithaju7090@gmail.com',
+        pass: process.env.SMTP_PASS || 'qzwthdkdermlsgqs'
+    }
+};
+
+const emailTransporter = nodemailer.createTransport(smtpOptions);
+
+async function sendEmail(mailOptions) {
+    const smtpConfigured = smtpOptions.host && smtpOptions.auth.user && smtpOptions.auth.pass && smtpOptions.host !== 'smtp.example.com';
+    if (!smtpConfigured) {
+        console.warn('SMTP credentials not configured. Email will be logged, not sent.', mailOptions);
+        return { info: 'smtp-config-missing', message: 'SMTP not configured' };
+    }
+
+    try {
+        return await emailTransporter.sendMail(mailOptions);
+    } catch (err) {
+        console.error('Email send failed:', err.message || err);
+        throw err;
+    }
+}
 
 // =========================================================================
 // 3. CORE CATALOG MANIPULATION ROUTES (PRODUCTS)
@@ -266,8 +290,8 @@ app.post('/checkout', (req, res) => {
 
     const orderSummary = cartItems.map(item => `- ${item.name}: ₹${item.price}`).join('\n');
     
-    resend.emails.send({
-        from: 'Nimmacart <onboarding@resend.dev>',
+    sendEmail({
+        from: 'Nimmacart <no-reply@nimmacart.local>',
         to: email,
         subject: 'Order Successfully Placed & Verified! 💎',
         text: `Hello,\n\nYour invoice order calculation statement has processed successfully.\n\nSummary Content:\n${orderSummary}\n\nAggregate Pricing Settlement: ₹${totalAmount}\nPayment Method Choice: [${paymentMethod}]\n\nLogistic Destination Routing:\n${shippingAddress}\n\nThank you for choosing Nimmacart!`
@@ -296,8 +320,9 @@ app.post('/signup', (req, res) => {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ message: "Fields cannot be empty" });
 
+    const normalizedEmail = email.trim().toLowerCase();
     const sql = "INSERT INTO users (email, password) VALUES ($1, $2)";
-    db.query(sql, [email, password], (err, result) => {
+    db.query(sql, [normalizedEmail, password], (err, result) => {
         if (err){
             console.error("Signup error log:", err.message);
             return res.status(500).json({ message: "User already exists" });
@@ -313,13 +338,14 @@ app.post('/login', (req, res) => {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ message: "Email and password are required" });
 
-    const sql = "SELECT email FROM users WHERE email = $1 AND password = $2";
-    db.query(sql, [email, password], (err, dbResult) => {
+    const normalizedEmail = email.trim().toLowerCase();
+    const sql = "SELECT email FROM users WHERE LOWER(email) = $1 AND password = $2";
+    db.query(sql, [normalizedEmail, password], (err, dbResult) => {
         if (err || !dbResult || !dbResult.rows || dbResult.rows.length === 0) {
             return res.status(401).json({ message: "Invalid email or password" });
         }
 
-        return res.json({ message: "Login successful", email });
+        return res.json({ message: "Login successful", email: normalizedEmail });
 
     });
 });
@@ -329,8 +355,11 @@ app.post('/forgot-password', (req, res) => {
     const { email } = req.body;
     if (!email) return res.status(400).json({ message: "Email is required" });
 
+    const normalizedEmail = email.trim().toLowerCase();
+    console.log("Requesting password reset for:", normalizedEmail);
+
     // Check if user exists
-    db.query("SELECT email FROM users WHERE email = $1", [email], (err, result) => {
+    db.query("SELECT email FROM users WHERE LOWER(email) = $1", [normalizedEmail], async (err, result) => {
         if (err) return res.status(500).json({ message: "Database error" });
         if (!result || result.rows.length === 0) {
             // Security Best Practice: Don't explicitly reveal that the email doesn't exist
@@ -342,41 +371,36 @@ app.post('/forgot-password', (req, res) => {
         const expiry = new Date();
         expiry.setHours(expiry.getHours() + 1); 
 
-        const updateSql = "UPDATE users SET reset_token = $1, reset_token_expires = $2 WHERE email = $3";
-        db.query(updateSql, [token, expiry, email], (updateErr) => {
+        const updateSql = "UPDATE users SET reset_token = $1, reset_token_expires = $2 WHERE LOWER(email) = $3";
+        db.query(updateSql, [token, expiry, normalizedEmail], async (updateErr) => {
             if (updateErr) return res.status(500).json({ message: "Failed to process token" });
 
-            // Create the reset link pointing to your frontend page
+            // Create the reset link pointing to your frontend page root
             const frontendOrigin = buildFrontendOrigin(req).replace(/\/$/, '');
-            let frontendPath = '/';
-            if (req.headers.referer) {
-                try {
-                    const parsedReferer = new URL(req.headers.referer);
-                    if (parsedReferer.pathname && parsedReferer.pathname !== '' && parsedReferer.pathname !== '/') {
-                        frontendPath = parsedReferer.pathname;
-                    }
-                } catch (e) {
-                    // ignore invalid referer URL and use default path
-                }
-            }
-            const resetLink = `${frontendOrigin}${frontendPath}?token=${token}`;
+            const resetLink = `${frontendOrigin}/?token=${token}`;
 
-            resend.emails.send({
-                from: 'Nimmacart Support <onboarding@resend.dev>',
-                to: email,
-                subject: 'Password Reset Request 🔑',
-                text: `You requested a password reset for your Nimmacart account.\n\nPlease open this link in your browser to reset your password:\n\n${resetLink}`,
-                html: `
-                    <div style="font-family: sans-serif; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; max-width: 500px;">
-                        <h3>Nimmacart Security</h3>
-                        <p>Click the button below to complete your credential modification process:</p>
-                        <a href="${resetLink}" target="_blank" style="background: #2563eb; color: white; padding: 10px 20px; text-decoration: none; font-weight: bold; border-radius: 6px; display: inline-block; margin: 15px 0;">
-                            Reset Password
-                        </a>
-                        <p style="font-size: 11px; color: #94a3b8;">If the button doesn't work, copy-paste this link: <br><a href="${resetLink}" target="_blank" style="color: #2563eb;">${resetLink}</a></p>
-                    </div>
-                `
-            }).catch(mailErr => console.error("Reset email delivery failed:", mailErr.message));
+            try {
+                const mailResult = await sendEmail({
+                    from: 'Nimmacart Support <no-reply@nimmacart.local>',
+                    to: normalizedEmail,
+                    subject: 'Password Reset Request 🔑',
+                    text: `You requested a password reset for your Nimmacart account.\n\nPlease open this link in your browser to reset your password:\n\n${resetLink}`,
+                    html: `
+                        <div style="font-family: sans-serif; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; max-width: 500px;">
+                            <h3>Nimmacart Security</h3>
+                            <p>Click the button below to complete your credential modification process:</p>
+                            <a href="${resetLink}" target="_blank" style="background: #2563eb; color: white; padding: 10px 20px; text-decoration: none; font-weight: bold; border-radius: 6px; display: inline-block; margin: 15px 0;">
+                                Reset Password
+                            </a>
+                            <p style="font-size: 11px; color: #94a3b8;">If the button doesn't work, copy-paste this link: <br><a href="${resetLink}" target="_blank" style="color: #2563eb;">${resetLink}</a></p>
+                        </div>
+                    `
+                });
+                console.log('Password reset email sent to:', normalizedEmail, 'Message ID:', mailResult.messageId || mailResult.response || 'unknown');
+            } catch (mailErr) {
+                console.error("Reset email delivery failed:", mailErr.message);
+                return res.status(500).json({ message: "Unable to send reset email right now. Please try again later." });
+            }
 
             res.json({ message: "If that email exists, a reset link has been sent." });
         });
